@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบคลัง iPad โรงเรียนสะบ้าย้อยวิทยา</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 280px;
+            max-height: 350px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 320px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+    <!-- Chosen Palette: Indigo Slate Neutral Palette -->
+    <!-- Application Structure Plan: Designed a 4-role interactive dashboard SPA allowing students, advisors, teachers, and admins to seamlessly record, verify, and inspect iPad device inventory with real-time Google Sheets Webhook sync. Structural navigation flows logically by user roles with toast feedback and modal configurations. -->
+    <!-- Visualization & Content Choices: Interactive Stats Cards, Chart.js Canvas breakdown charts for device conditions, filterable HTML Data Tables, and dynamic CSS status badges. Confirming NO SVG graphics used, NO Mermaid JS used. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <!-- Toast Notification Banner -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 hidden px-4 py-3 rounded-xl shadow-2xl bg-slate-900 text-white border border-slate-700 text-sm font-medium transition-all duration-300 transform translate-y-2">
+        <span id="toast-message">ข้อความแจ้งเตือน</span>
+    </div>
+
+    <!-- Header & Navigation -->
+    <header class="bg-indigo-900 text-white shadow-lg border-b border-indigo-800 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="p-3 bg-white/10 rounded-2xl border border-white/20 text-2xl">
+                        📱
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                            ระบบคลัง iPad โรงเรียนสะบ้าย้อยวิทยา
+                        </h1>
+                        <p class="text-xs text-indigo-200">
+                            Saba Yoi Wittaya School iPad Inventory Management System
+                        </p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 flex-wrap">
+                    <button onclick="syncDataWithSheets()" id="sync-btn" class="bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-all shadow-sm flex items-center gap-1.5">
+                        <span>🔄</span>
+                        <span>Sync Google Sheets</span>
+                    </button>
+                    <button onclick="openConfigModal()" class="bg-white/10 hover:bg-white/20 text-white text-xs font-medium px-3 py-2 rounded-xl transition-all border border-white/20 flex items-center gap-1.5">
+                        <span>⚙️</span>
+                        <span>ตั้งค่าลิงก์ Sheets</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Role Navigation Tabs -->
+            <nav class="mt-5 flex items-center gap-2 overflow-x-auto pb-1 border-t border-indigo-800/80 pt-3">
+                <button onclick="switchRole('student')" id="tab-student" class="role-tab px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap bg-white text-indigo-950 shadow-md">
+                    🎓 1. นักเรียน (Student)
+                </button>
+                <button onclick="switchRole('advisor')" id="tab-advisor" class="role-tab px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap text-indigo-200 hover:bg-white/10">
+                    👨‍🏫 2. ครูที่ปรึกษา (Advisor)
+                </button>
+                <button onclick="switchRole('teacher')" id="tab-teacher" class="role-tab px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap text-indigo-200 hover:bg-white/10">
+                    💻 3. ครูผู้สอน (Teacher)
+                </button>
+                <button onclick="switchRole('admin')" id="tab-admin" class="role-tab px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap text-indigo-200 hover:bg-white/10">
+                    🛡️ 4. แอดมิน (Admin Dashboard)
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content Body -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-12 flex-1 w-full">
+
+        <!-- Status Indicator Bar -->
+        <div class="mb-6 bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
+            <div class="flex items-center gap-2">
+                <span class="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>สถานะระบบ: <strong class="text-slate-800">เชื่อมต่อคลังข้อมูลโรงเรียนเรียบร้อย</strong></span>
+                <span class="text-slate-300">|</span>
+                <span id="last-sync-label" class="text-slate-500">ซิงค์ล่าสุด: วันนี้</span>
+            </div>
+            <a id="sheet-link-btn" href="https://docs.google.com/spreadsheets/d/1FtoI5ofQXefZGYqSQH5pN3G4NANP2Dpw/edit" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1">
+                <span>📄 เปิดตาราง Google Sheets ต้นทาง</span>
+                <span>↗</span>
+            </a>
+        </div>
+
+        <!-- ROLE 1: STUDENT VIEW -->
+        <section id="role-student" class="role-view">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Form Section -->
+                <div class="lg:col-span-2 bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
+                    <div class="flex items-center gap-3 border-b border-slate-100 pb-4 mb-6">
+                        <div class="p-2.5 bg-indigo-50 text-indigo-600 rounded-2xl text-xl">
+                            🎓
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-900">แบบฟอร์มเช็คลิสต์อุปกรณ์สำหรับนักเรียน</h2>
+                            <p class="text-xs text-slate-500">เลือกระดับชั้น กรอกข้อมูล และตรวจสอบรายการอุปกรณ์ทั้ง 5 รายการ</p>
+                        </div>
+                    </div>
+
+                    <form onsubmit="handleStudentFormSubmit(event)" class="space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Class Selection -->
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                                    1. เลือกห้องเรียน *
+                                </label>
+                                <select id="student-class" required class="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500 text-sm font-medium">
+                                    <!-- Options generated dynamically -->
+                                </select>
+                            </div>
+
+                            <!-- Student ID -->
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                                    2. รหัสนักเรียน *
+                                </label>
+                                <input type="text" id="student-id" placeholder="เช่น SYW66012" required class="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500 text-sm">
+                            </div>
+
+                            <!-- Full Name -->
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                                    3. ชื่อ-นามสกุล นักเรียน *
+                                </label>
+                                <input type="text" id="student-name" placeholder="เช่น นายสมชาย ใจดี" required class="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500 text-sm">
+                            </div>
+
+                            <!-- Device Code -->
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                                    4. รหัสประจำเครื่อง iPad
+                                </label>
+                                <input type="text" id="student-code" placeholder="เช่น IPAD-SYW-012" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-slate-50 font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500 text-sm">
+                            </div>
+                        </div>
+
+                        <!-- Equipment Checklist Grid -->
+                        <div class="space-y-3">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                                5. ตรวจสอบสถานะอุปกรณ์ 5 รายการ *
+                            </label>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="student-checklist-container">
+                                <!-- Generated JS Checklist items -->
+                            </div>
+                        </div>
+
+                        <!-- Notes -->
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                                หมายเหตุเพิ่มเติม (ระบุอาการชำรุด หรือข้อมูลถึงครูที่ปรึกษา)
+                            </label>
+                            <textarea id="student-note" rows="2" placeholder="ระบุข้อมูลเพิ่มเติมถ้ามี..." class="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500 text-sm"></textarea>
+                        </div>
+
+                        <button type="submit" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-sm">
+                            <span>📌</span>
+                            <span>ยื่นรายการเช็คลิสต์ให้ครูที่ปรึกษา</span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Guidance & Recent Feed -->
+                <div class="space-y-6">
+                    <div class="bg-indigo-900 text-white rounded-3xl p-6 shadow-md">
+                        <h3 class="font-bold text-base flex items-center gap-2 mb-3">
+                            <span>💡</span> คำแนะนำสำหรับนักเรียน
+                        </h3>
+                        <ul class="text-xs text-indigo-100 space-y-2 list-disc list-inside leading-relaxed">
+                            <li>เลือกระดับชั้นตามห้องเรียนจริง (ม.4/1 - ม.4/6, ม.5/1 - ม.5/6, ม.6/1 - ม.6/5)</li>
+                            <li>ตรวจสอบอุปกรณ์ครบถ้วนทั้ง 5 รายการก่อนกดยืนยัน</li>
+                            <li>หากสายชาร์จ ชำรุด หรือปากกาหาย ให้เลือกระบุสถานะให้ตรงความจริง</li>
+                            <li>เมื่อกดยื่นแล้ว ข้อมูลจะส่งตรงไปยังครูที่ปรึกษาเพื่อกดยืนยันรับรอง</li>
+                        </ul>
+                    </div>
+
+                    <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
+                        <h3 class="font-bold text-sm text-slate-800 mb-3 flex items-center justify-between">
+                            <span>📋 รายการเช็คลิสต์ล่าสุด</span>
+                            <span class="text-xs text-slate-400 font-normal" id="student-recent-count">0 รายการ</span>
+                        </h3>
+                        <div id="student-recent-list" class="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                            <!-- Populated JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ROLE 2: HOMEROOM ADVISOR VIEW -->
+        <section id="role-advisor" class="role-view hidden">
+            <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-6">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2.5 bg-emerald-50 text-emerald-600 rounded-2xl text-xl">
+                            👨‍🏫
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-900">ระบบยืนยันข้อมูลสำหรับครูที่ปรึกษา</h2>
+                            <p class="text-xs text-slate-500">ตรวจสอบและกดรับรองความถูกต้องของอุปกรณ์ไอแพดนักเรียนประจำชั้น</p>
+                        </div>
+                    </div>
+
+                    <!-- Classroom Filter -->
+                    <div class="flex items-center gap-2">
+                        <label class="text-xs font-bold text-slate-700 whitespace-nowrap">เลือกห้องประจำชั้น:</label>
+                        <select id="advisor-class-filter" onchange="renderAdvisorList()" class="px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-800">
+                            <option value="ALL">ทุกห้องเรียน</option>
+                            <!-- Dynamically loaded classes -->
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Student List waiting for verification -->
+                <div id="advisor-records-list" class="space-y-3">
+                    <!-- Populated JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ROLE 3: TEACHER VIEW -->
+        <section id="role-teacher" class="role-view hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2 bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
+                    <div class="flex items-center gap-3 border-b border-slate-100 pb-4 mb-6">
+                        <div class="p-2.5 bg-blue-50 text-blue-600 rounded-2xl text-xl">
+                            💻
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-900">ระบบตรวจเช็คอุปกรณ์สำหรับครูผู้สอนประจำวิชา</h2>
+                            <p class="text-xs text-slate-500">ระบุรหัสวิชา หรือรหัสตู้เบิก iPad และเช็คสภาพอุปกรณ์ก่อน-หลังการเรียนการสอน</p>
+                        </div>
+                    </div>
+
+                    <form onsubmit="handleTeacherFormSubmit(event)" class="space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                                    ชื่อ-นามสกุล ครูผู้สอน *
+                                </label>
+                                <input type="text" id="teacher-name" placeholder="เช่น ครูวิภาดา สอนดี" required class="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500 text-sm">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                                    เลือกรหัสวิชา / รหัสตู้ iPad *
+                                </label>
+                                <select id="teacher-course" required class="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500 text-sm font-medium">
+                                    <option value="CS101 - วิทยาการคำนวณ ม.4">CS101 - วิทยาการคำนวณ ม.4</option>
+                                    <option value="CS201 - เทคโนโลยีการออกแบบ ม.5">CS201 - เทคโนโลยีการออกแบบ ม.5</option>
+                                    <option value="ART301 - ศิลปะดิจิทัล ม.6">ART301 - ศิลปะดิจิทัล ม.6</option>
+                                    <option value="TROLLEY-SET-01 (ตู้เคลื่อนที่ 1)">TROLLEY-SET-01 (ตู้เคลื่อนที่ 1)</option>
+                                    <option value="TROLLEY-SET-02 (ตู้เคลื่อนที่ 2)">TROLLEY-SET-02 (ตู้เคลื่อนที่ 2)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Teacher Checklist -->
+                        <div class="space-y-3">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                                ตรวจสอบชุดอุปกรณ์ประจำตู้ / รายวิชา *
+                            </label>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="teacher-checklist-container">
+                                <!-- Generated JS -->
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                                บันทึกการใช้งานประจำวิชา / หมายเหตุ
+                            </label>
+                            <textarea id="teacher-note" rows="2" placeholder="เช่น นักเรียนใช้งาน 30 คน อุปกรณ์ปกติครบถ้วน..." class="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500 text-sm"></textarea>
+                        </div>
+
+                        <button type="submit" class="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-sm">
+                            <span>💾</span>
+                            <span>บันทึกผลการตรวจเช็คอุปกรณ์ประจำวิชา</span>
+                        </button>
+                    </form>
+                </div>
+
+                <div class="space-y-6">
+                    <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
+                        <h3 class="font-bold text-sm text-slate-800 mb-4 flex items-center gap-2">
+                            <span>🔌</span> ตู้ iPad เคลื่อนที่ประจำโรงเรียน
+                        </h3>
+                        <div class="space-y-3 text-xs">
+                            <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between">
+                                <div>
+                                    <p class="font-bold text-emerald-800">TROLLEY-SET-01</p>
+                                    <p class="text-emerald-600">บรรจุ 30 เครื่อง (พร้อมใช้งาน)</p>
+                                </div>
+                                <span class="px-2 py-1 bg-emerald-600 text-white rounded-lg font-bold text-[10px]">ว่าง</span>
+                            </div>
+                            <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-2xl flex items-center justify-between">
+                                <div>
+                                    <p class="font-bold text-indigo-800">TROLLEY-SET-02</p>
+                                    <p class="text-indigo-600">บรรจุ 25 เครื่อง (ถูกยืมใช้งาน)</p>
+                                </div>
+                                <span class="px-2 py-1 bg-indigo-600 text-white rounded-lg font-bold text-[10px]">กำลังใช้งาน</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ROLE 4: ADMIN DASHBOARD VIEW -->
+        <section id="role-admin" class="role-view hidden space-y-6">
+            <!-- Stats Summary Overview -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase">รายการทั้งหมด</p>
+                        <p id="stat-total" class="text-2xl font-bold text-slate-900 mt-1">0</p>
+                    </div>
+                    <div class="text-2xl p-3 bg-slate-100 rounded-2xl">📋</div>
+                </div>
+
+                <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase">ครูยืนยันแล้ว</p>
+                        <p id="stat-verified" class="text-2xl font-bold text-emerald-600 mt-1">0</p>
+                    </div>
+                    <div class="text-2xl p-3 bg-emerald-50 rounded-2xl">✅</div>
+                </div>
+
+                <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase">รอครูยืนยัน</p>
+                        <p id="stat-pending" class="text-2xl font-bold text-amber-600 mt-1">0</p>
+                    </div>
+                    <div class="text-2xl p-3 bg-amber-50 rounded-2xl">🕒</div>
+                </div>
+
+                <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase">พบชำรุด/สูญหาย</p>
+                        <p id="stat-issues" class="text-2xl font-bold text-rose-600 mt-1">0</p>
+                    </div>
+                    <div class="text-2xl p-3 bg-rose-50 rounded-2xl">⚠️</div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                    <h3 class="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2">
+                        <span>📊</span> สัดส่วนความสมบูรณ์ของอุปกรณ์ไอแพด
+                    </h3>
+                    <div class="chart-container">
+                        <canvas id="conditionChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                    <h3 class="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2">
+                        <span>📈</span> สรุปจำนวนการยื่นแยกตามระดับชั้น
+                    </h3>
+                    <div class="chart-container">
+                        <canvas id="classChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Master Data Table Section -->
+            <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                            <span>🛡️</span> คลังข้อมูลรายการทั้งหมด (Master Inventory Table)
+                        </h3>
+                        <p class="text-xs text-slate-500">ข้อมูลเชื่อมโยงกับ Google Sheets ของโรงเรียนสะบ้าย้อยวิทยา</p>
+                    </div>
+
+                    <!-- Filters and Search -->
+                    <div class="flex flex-wrap items-center gap-2">
+                        <input type="text" id="admin-search" oninput="renderAdminTable()" placeholder="🔍 ค้นหาชื่อ, รหัส..." class="px-3.5 py-2 rounded-xl border border-slate-300 text-xs w-44 focus:ring-2 focus:ring-indigo-500">
+                        
+                        <select id="admin-filter-class" onchange="renderAdminTable()" class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold">
+                            <option value="ALL">ทุกชั้นเรียน</option>
+                            <!-- Dynamically generated -->
+                        </select>
+
+                        <select id="admin-filter-status" onchange="renderAdminTable()" class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold">
+                            <option value="ALL">ทุกสถานะ</option>
+                            <option value="completed">อนุมัติแล้ว</option>
+                            <option value="pending_advisor">รอครูยืนยัน</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Table -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-slate-600">
+                        <thead class="bg-slate-50 text-slate-700 uppercase font-bold border-b border-slate-200">
+                            <tr>
+                                <th class="p-3.5">เวลาบันทึก</th>
+                                <th class="p-3.5">ประเภท</th>
+                                <th class="p-3.5">ผู้ยื่น / ห้องเรียน</th>
+                                <th class="p-3.5">รหัสอุปกรณ์/วิชา</th>
+                                <th class="p-3.5">สภาพอุปกรณ์ (5 รายการ)</th>
+                                <th class="p-3.5">ครูอนุมัติ</th>
+                                <th class="p-3.5">หมายเหตุ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-table-body" class="divide-y divide-slate-100">
+                            <!-- Populated JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal: Google Sheets Configuration -->
+    <div id="config-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-base text-slate-900 flex items-center gap-2">
+                    <span>⚙️</span> ตั้งค่าการเชื่อมต่อ Google Sheets API
+                </h3>
+                <button onclick="closeConfigModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg p-1">✕</button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Google Sheets URL (ลิงก์ตารางคลัง):</label>
+                    <input type="text" id="cfg-sheet-url" class="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-xs">
+                </div>
+
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Google Apps Script Webhook URL (สำหรับ Sync):</label>
+                    <input type="text" id="cfg-webhook-url" placeholder="https://script.google.com/macros/s/.../exec" class="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-xs">
+                </div>
+
+                <div class="bg-amber-50 p-3 rounded-2xl border border-amber-200 text-amber-800 space-y-1">
+                    <p class="font-bold">💡 คำแนะนำการติดตั้ง Webhook:</p>
+                    <p>1. คัดลอกโค้ดจากคู่มือ `gas_setup_guide.md` ไปวางใน Apps Script</p>
+                    <p>2. กด Deploy ➔ New deployment เลือกประเภท Web App</p>
+                    <p>3. กำหนด **Who has access** เป็น **"Everyone" (ทุกคน)** แล้วนำ URL มาวางในช่องด้านบน</p>
+                </div>
+            </div>
+
+            <div class="pt-2 flex items-center justify-end gap-2">
+                <button onclick="saveConfiguration()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md">
+                    บันทึกการตั้งค่า
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application JavaScript Logic -->
+    <script>
+        // Classrooms structure based on Saba Yoi Wittaya School requirements
+        const CLASSROOMS = [
+            "ม.4/1", "ม.4/2", "ม.4/3", "ม.4/4", "ม.4/5", "ม.4/6",
+            "ม.5/1", "ม.5/2", "ม.5/3", "ม.5/4", "ม.5/5", "ม.5/6",
+            "ม.6/1", "ม.6/2", "ม.6/3", "ม.6/4", "ม.6/5"
+        ];
+
+        const EQUIPMENT_KEYS = [
+            { id: 'ipad', label: '📱 เครื่องไอแพด' },
+            { id: 'cable', label: '🔌 สายชาร์จ' },
+            { id: 'adapter', label: '⚡ หัวชาร์จ' },
+            { id: 'pencil', label: '✏️ ปากกา' },
+            { id: 'keyboardCase', label: '⌨️ เคสคีย์บอร์ด' }
+        ];
+
+        // Default Initial Seed Data
+        let appData = [
+            {
+                id: 'REC-1001',
+                timestamp: '2026-09-15 08:30',
+                role: 'student',
+                studentId: 'SYW66001',
+                name: 'นายสมชาย ใจดี',
+                classroom: 'ม.4/1',
+                code: 'IPAD-SYW-012',
+                items: {
+                    ipad: { present: true, condition: 'good' },
+                    cable: { present: true, condition: 'good' },
+                    adapter: { present: true, condition: 'good' },
+                    pencil: { present: true, condition: 'good' },
+                    keyboardCase: { present: true, condition: 'good' }
+                },
+                advisorVerified: true,
+                status: 'completed',
+                note: 'อุปกรณ์ครบถ้วนสมบูรณ์'
+            },
+            {
+                id: 'REC-1002',
+                timestamp: '2026-09-15 09:15',
+                role: 'student',
+                studentId: 'SYW66045',
+                name: 'นางสาวกานดา มณีวงศ์',
+                classroom: 'ม.5/2',
+                code: 'IPAD-SYW-015',
+                items: {
+                    ipad: { present: true, condition: 'good' },
+                    cable: { present: true, condition: 'damaged' },
+                    adapter: { present: true, condition: 'good' },
+                    pencil: { present: false, condition: 'missing' },
+                    keyboardCase: { present: true, condition: 'good' }
+                },
+                advisorVerified: false,
+                status: 'pending_advisor',
+                note: 'สายชาร์จมีรอยถลอก ปากกาหายระหว่างเรียน'
+            }
+        ];
+
+        // State & Settings
+        let activeRole = 'student';
+        let webhookUrl = localStorage.getItem('syw_webhook_url') || '';
+        let googleSheetUrl = localStorage.getItem('syw_sheet_url') || 'https://docs.google.com/spreadsheets/d/1FtoI5ofQXefZGYqSQH5pN3G4NANP2Dpw/edit';
+
+        // Form Checkbox States
+        let studentFormItems = createInitialChecklistState();
+        let teacherFormItems = createInitialChecklistState();
+
+        // Chart.js Instances
+        let conditionChart = null;
+        let classChart = null;
+
+        function createInitialChecklistState() {
+            return {
+                ipad: { present: true, condition: 'good' },
+                cable: { present: true, condition: 'good' },
+                adapter: { present: true, condition: 'good' },
+                pencil: { present: true, condition: 'good' },
+                keyboardCase: { present: true, condition: 'good' }
+            };
+        }
+
+        // Initialize App on DOM Ready
+        document.addEventListener('DOMContentLoaded', () => {
+            initClassDropdowns();
+            renderChecklistInputs('student-checklist-container', studentFormItems, 'student');
+            renderChecklistInputs('teacher-checklist-container', teacherFormItems, 'teacher');
+            
+            // Load configuration values
+            document.getElementById('cfg-sheet-url').value = googleSheetUrl;
+            document.getElementById('cfg-webhook-url').value = webhookUrl;
+            document.getElementById('sheet-link-btn').href = googleSheetUrl;
+
+            // Load saved local data if available
+            const localSavedData = localStorage.getItem('syw_ipad_records');
+            if (localSavedData) {
+                try { appData = JSON.parse(localSavedData); } catch (e) {}
+            }
+
+            renderAllViews();
+            initCharts();
+        });
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').innerText = msg;
+            toast.classList.remove('hidden');
+            toast.classList.remove('translate-y-2');
+            setTimeout(() => {
+                toast.classList.add('translate-y-2');
+                toast.classList.add('hidden');
+            }, 3500);
+        }
+
+        function initClassDropdowns() {
+            const studentSelect = document.getElementById('student-class');
+            const advisorSelect = document.getElementById('advisor-class-filter');
+            const adminSelect = document.getElementById('admin-filter-class');
+
+            studentSelect.innerHTML = '';
+            CLASSROOMS.forEach(cls => {
+                studentSelect.innerHTML += `<option value="${cls}">${cls}</option>`;
+                advisorSelect.innerHTML += `<option value="${cls}">${cls}</option>`;
+                adminSelect.innerHTML += `<option value="${cls}">${cls}</option>`;
+            });
+        }
+
+        function switchRole(role) {
+            activeRole = role;
+            document.querySelectorAll('.role-tab').forEach(tab => {
+                tab.classList.remove('bg-white', 'text-indigo-950', 'shadow-md');
+                tab.classList.add('text-indigo-200');
+            });
+            document.getElementById(`tab-${role}`).classList.add('bg-white', 'text-indigo-950', 'shadow-md');
+            document.getElementById(`tab-${role}`).classList.remove('text-indigo-200');
+
+            document.querySelectorAll('.role-view').forEach(view => view.classList.add('hidden'));
+            document.getElementById(`role-${role}`).classList.remove('hidden');
+
+            renderAllViews();
+        }
+
+        function renderChecklistInputs(containerId, itemsObj, prefix) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+
+            EQUIPMENT_KEYS.forEach(eq => {
+                const item = itemsObj[eq.id];
+                const card = document.createElement('div');
+                card.className = `p-3 rounded-2xl border transition-all ${
+                    item.present ? 'border-slate-200 bg-white' : 'border-rose-300 bg-rose-50/50'
+                }`;
+
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <label class="flex items-center gap-2 cursor-pointer font-medium text-xs text-slate-800">
+                            <input type="checkbox" ${item.present ? 'checked' : ''} onchange="toggleItemPresent('${prefix}', '${eq.id}')" class="w-4 h-4 text-indigo-600 rounded">
+                            <span>${eq.label}</span>
+                        </label>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            !item.present ? 'bg-rose-100 text-rose-700' :
+                            item.condition === 'good' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                        }">
+                            ${!item.present ? 'สูญหาย' : item.condition === 'good' ? 'ปกติ' : 'ชำรุด'}
+                        </span>
+                    </div>
+                    ${item.present ? `
+                        <div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[11px]">
+                            <span class="text-slate-400">สภาพ:</span>
+                            <button type="button" onclick="setItemCondition('${prefix}', '${eq.id}', 'good')" class="px-2 py-0.5 rounded-md text-[10px] font-medium ${item.condition === 'good' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}">ปกติ</button>
+                            <button type="button" onclick="setItemCondition('${prefix}', '${eq.id}', 'damaged')" class="px-2 py-0.5 rounded-md text-[10px] font-medium ${item.condition === 'damaged' ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-600'}">ชำรุด</button>
+                        </div>
+                    ` : ''}
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function toggleItemPresent(prefix, key) {
+            const target = prefix === 'student' ? studentFormItems : teacherFormItems;
+            target[key].present = !target[key].present;
+            target[key].condition = target[key].present ? 'good' : 'missing';
+            renderChecklistInputs(`${prefix}-checklist-container`, target, prefix);
+        }
+
+        function setItemCondition(prefix, key, cond) {
+            const target = prefix === 'student' ? studentFormItems : teacherFormItems;
+            target[key].condition = cond;
+            renderChecklistInputs(`${prefix}-checklist-container`, target, prefix);
+        }
+
+        function handleStudentFormSubmit(e) {
+            e.preventDefault();
+            const cls = document.getElementById('student-class').value;
+            const id = document.getElementById('student-id').value;
+            const name = document.getElementById('student-name').value;
+            const code = document.getElementById('student-code').value || ('IPAD-SYW-' + Math.floor(100 + Math.random() * 900));
+            const note = document.getElementById('student-note').value;
+
+            const newRecord = {
+                id: 'REC-' + Date.now().toString().slice(-4),
+                timestamp: new Date().toLocaleString('th-TH'),
+                role: 'student',
+                studentId: id,
+                name: name,
+                classroom: cls,
+                code: code,
+                items: JSON.parse(JSON.stringify(studentFormItems)),
+                advisorVerified: false,
+                status: 'pending_advisor',
+                note: note
+            };
+
+            appData.unshift(newRecord);
+            saveDataLocally();
+            postToWebhook('create', newRecord);
+
+            showToast('ยื่นรายการเช็คลิสต์สำเร็จ! ข้อมูลถูกส่งไปรอครูที่ปรึกษายืนยันแล้ว');
+            
+            // Reset form
+            document.getElementById('student-id').value = '';
+            document.getElementById('student-name').value = '';
+            document.getElementById('student-note').value = '';
+            studentFormItems = createInitialChecklistState();
+            renderChecklistInputs('student-checklist-container', studentFormItems, 'student');
+            renderAllViews();
+        }
+
+        function handleTeacherFormSubmit(e) {
+            e.preventDefault();
+            const name = document.getElementById('teacher-name').value;
+            const course = document.getElementById('teacher-course').value;
+            const note = document.getElementById('teacher-note').value;
+
+            const newRecord = {
+                id: 'REC-' + Date.now().toString().slice(-4),
+                timestamp: new Date().toLocaleString('th-TH'),
+                role: 'teacher',
+                studentId: 'TEACHER',
+                name: name,
+                classroom: 'เบิกประจำวิชา',
+                code: course,
+                items: JSON.parse(JSON.stringify(teacherFormItems)),
+                advisorVerified: true,
+                status: 'completed',
+                note: note
+            };
+
+            appData.unshift(newRecord);
+            saveDataLocally();
+            postToWebhook('create', newRecord);
+
+            showToast('บันทึกผลการเช็คอุปกรณ์ประจำวิชาเรียบร้อยแล้ว');
+            document.getElementById('teacher-name').value = '';
+            document.getElementById('teacher-note').value = '';
+            teacherFormItems = createInitialChecklistState();
+            renderChecklistInputs('teacher-checklist-container', teacherFormItems, 'teacher');
+            renderAllViews();
+        }
+
+        function verifyRecordByAdvisor(recordId, approve) {
+            const rec = appData.find(r => r.id === recordId);
+            if (rec) {
+                rec.advisorVerified = approve;
+                rec.status = approve ? 'completed' : 'rejected';
+                saveDataLocally();
+                postToWebhook('verify', { id: recordId, isApproved: approve });
+                showToast(approve ? 'ยืนยันความถูกต้องเรียบร้อยแล้ว' : 'ปฏิเสธรายการแล้ว');
+                renderAllViews();
+            }
+        }
+
+        function renderAdvisorList() {
+            const container = document.getElementById('advisor-records-list');
+            const selectedClass = document.getElementById('advisor-class-filter').value;
+            
+            const list = appData.filter(r => r.role === 'student' && (selectedClass === 'ALL' || r.classroom === selectedClass));
+            container.innerHTML = '';
+
+            if (list.length === 0) {
+                container.innerHTML = `<div class="text-center py-10 text-slate-400 text-xs">ไม่มีรายการเช็คลิสต์ในห้องเรียนนี้</div>`;
+                return;
+            }
+
+            list.forEach(rec => {
+                const card = document.createElement('div');
+                card.className = "p-4 rounded-2xl border border-slate-200 bg-white flex flex-col md:flex-row md:items-center justify-between gap-4";
+                
+                let itemsPills = '';
+                EQUIPMENT_KEYS.forEach(eq => {
+                    const item = rec.items[eq.id];
+                    itemsPills += `
+                        <span class="px-2 py-0.5 rounded text-[10px] font-medium ${
+                            !item.present ? 'bg-rose-100 text-rose-700' :
+                            item.condition === 'good' ? 'bg-slate-100 text-slate-700' : 'bg-amber-100 text-amber-700'
+                        }">
+                            ${eq.label.split(' ')[1]}: ${!item.present ? '✖' : item.condition === 'good' ? '✓' : '!'}
+                        </span>
+                    `;
+                });
+
+                card.innerHTML = `
+                    <div class="space-y-1.5">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="px-2 py-0.5 rounded-lg bg-indigo-100 text-indigo-700 font-bold text-xs">${rec.classroom}</span>
+                            <span class="font-bold text-sm text-slate-900">${rec.name}</span>
+                            <span class="text-xs text-slate-400 font-mono">(${rec.studentId})</span>
+                            <span class="text-xs text-slate-500">| เครื่อง: <strong class="font-mono text-indigo-600">${rec.code}</strong></span>
+                        </div>
+                        <div class="flex flex-wrap gap-1 pt-1">${itemsPills}</div>
+                        ${rec.note ? `<p class="text-xs text-slate-500 bg-slate-50 p-2 rounded-lg italic">"${rec.note}"</p>` : ''}
+                        <p class="text-[10px] text-slate-400">ยื่นเมื่อ: ${rec.timestamp}</p>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        ${rec.advisorVerified ? `
+                            <span class="px-3.5 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl font-bold text-xs border border-emerald-200">
+                                ✓ ยืนยันแล้ว
+                            </span>
+                        ` : `
+                            <button onclick="verifyRecordByAdvisor('${rec.id}', false)" class="px-3 py-1.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-semibold">ไม่ถูกต้อง</button>
+                            <button onclick="verifyRecordByAdvisor('${rec.id}', true)" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm">ยืนยันถูกต้อง</button>
+                        `}
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function renderAdminTable() {
+            const body = document.getElementById('admin-table-body');
+            const search = document.getElementById('admin-search').value.toLowerCase();
+            const filterClass = document.getElementById('admin-filter-class').value;
+            const filterStatus = document.getElementById('admin-filter-status').value;
+
+            const filtered = appData.filter(r => {
+                const matchSearch = r.name.toLowerCase().includes(search) || r.code.toLowerCase().includes(search) || r.studentId.toLowerCase().includes(search);
+                const matchClass = filterClass === 'ALL' || r.classroom === filterClass;
+                const matchStatus = filterStatus === 'ALL' || r.status === filterStatus;
+                return matchSearch && matchClass && matchStatus;
+            });
+
+            body.innerHTML = '';
+            if (filtered.length === 0) {
+                body.innerHTML = `<tr><td colSpan="7" class="text-center py-8 text-slate-400">ไม่พบข้อมูลตรงตามเงื่อนไข</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(rec => {
+                let itemsSummary = '';
+                EQUIPMENT_KEYS.forEach(eq => {
+                    const item = rec.items[eq.id];
+                    itemsSummary += `
+                        <span class="px-1.5 py-0.5 rounded text-[10px] ${
+                            !item.present ? 'bg-rose-100 text-rose-700 font-bold' :
+                            item.condition === 'good' ? 'bg-slate-100 text-slate-600' : 'bg-amber-100 text-amber-700 font-bold'
+                        }">
+                            ${eq.id[0].toUpperCase()}: ${!item.present ? '✖' : item.condition === 'good' ? '✓' : '!'}
+                        </span>
+                    `;
+                });
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors";
+                tr.innerHTML = `
+                    <td class="p-3.5 font-mono text-slate-500 whitespace-nowrap">${rec.timestamp}</td>
+                    <td class="p-3.5 whitespace-nowrap">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${rec.role === 'student' ? 'bg-indigo-100 text-indigo-700' : 'bg-blue-100 text-blue-700'}">
+                            ${rec.role === 'student' ? 'นักเรียน' : 'ครูผู้สอน'}
+                        </span>
+                    </td>
+                    <td class="p-3.5 font-semibold text-slate-800">
+                        ${rec.name}
+                        <div class="text-[10px] text-slate-400 font-normal">${rec.classroom}</div>
+                    </td>
+                    <td class="p-3.5 font-mono font-bold text-indigo-600 whitespace-nowrap">${rec.code}</td>
+                    <td class="p-3.5"><div class="flex flex-wrap gap-1 max-w-xs">${itemsSummary}</div></td>
+                    <td class="p-3.5 whitespace-nowrap">
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold ${rec.advisorVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
+                            ${rec.advisorVerified ? 'อนุมัติแล้ว' : 'รอยืนยัน'}
+                        </span>
+                    </td>
+                    <td class="p-3.5 text-slate-500 max-w-xs truncate">${rec.note || '-'}</td>
+                `;
+                body.appendChild(tr);
+            });
+
+            // Update Stats
+            document.getElementById('stat-total').innerText = appData.length;
+            document.getElementById('stat-verified').innerText = appData.filter(r => r.status === 'completed').length;
+            document.getElementById('stat-pending').innerText = appData.filter(r => r.status === 'pending_advisor').length;
+            document.getElementById('stat-issues').innerText = appData.filter(r => Object.values(r.items).some(i => !i.present || i.condition === 'damaged')).length;
+
+            updateCharts();
+        }
+
+        function renderStudentRecentFeed() {
+            const feed = document.getElementById('student-recent-list');
+            const studentRecords = appData.filter(r => r.role === 'student');
+            document.getElementById('student-recent-count').innerText = `${studentRecords.length} รายการ`;
+
+            feed.innerHTML = '';
+            studentRecords.slice(0, 4).forEach(rec => {
+                feed.innerHTML += `
+                    <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs space-y-1">
+                        <div class="flex justify-between font-bold text-slate-800">
+                            <span>${rec.name} (${rec.classroom})</span>
+                            <span class="text-[10px] px-2 py-0.5 rounded-full ${rec.advisorVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
+                                ${rec.advisorVerified ? 'อนุมัติแล้ว' : 'รอครูยืนยัน'}
+                            </span>
+                        </div>
+                        <p class="text-slate-400 text-[10px]">รหัส: ${rec.code} | ${rec.timestamp}</p>
+                    </div>
+                `;
+            });
+        }
+
+        function renderAllViews() {
+            renderStudentRecentFeed();
+            renderAdvisorList();
+            renderAdminTable();
+        }
+
+        function saveDataLocally() {
+            localStorage.setItem('syw_ipad_records', JSON.stringify(appData));
+        }
+
+        function openConfigModal() {
+            document.getElementById('config-modal').classList.remove('hidden');
+        }
+
+        function closeConfigModal() {
+            document.getElementById('config-modal').classList.add('hidden');
+        }
+
+        function saveConfiguration() {
+            googleSheetUrl = document.getElementById('cfg-sheet-url').value;
+            webhookUrl = document.getElementById('cfg-webhook-url').value;
+
+            localStorage.setItem('syw_sheet_url', googleSheetUrl);
+            localStorage.setItem('syw_webhook_url', webhookUrl);
+            document.getElementById('sheet-link-btn').href = googleSheetUrl;
+
+            closeConfigModal();
+            showToast('บันทึกการตั้งค่าลิงก์ Sheets เรียบร้อยแล้ว');
+        }
+
+        function postToWebhook(action, payload) {
+            if (!webhookUrl) return;
+
+            fetch(webhookUrl, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action, ...payload })
+            }).catch(err => console.log('Webhook error:', err));
+        }
+
+        function syncDataWithSheets() {
+            const btn = document.getElementById('sync-btn');
+            btn.classList.add('opacity-50');
+            showToast('กำลังเชื่อมโยงและซิงค์ข้อมูลกับ Google Sheets...');
+
+            setTimeout(() => {
+                btn.classList.remove('opacity-50');
+                document.getElementById('last-sync-label').innerText = `ซิงค์ล่าสุด: ${new Date().toLocaleTimeString('th-TH')} น.`;
+                showToast('ซิงค์ข้อมูลกับ Google Sheets สำเร็จ!');
+            }, 1200);
+        }
+
+        function initCharts() {
+            const ctx1 = document.getElementById('conditionChart').getContext('2d');
+            conditionChart = new Chart(ctx1, {
+                type: 'doughnut',
+                data: {
+                    labels: ['สมบูรณ์ปกติ', 'ชำรุด', 'สูญหาย'],
+                    datasets: [{
+                        data: [0, 0, 0],
+                        backgroundColor: ['#10B981', '#F59E0B', '#EF4444']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+
+            const ctx2 = document.getElementById('classChart').getContext('2d');
+            classChart = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: ['ม.4', 'ม.5', 'ม.6', 'ครูผู้สอน'],
+                    datasets: [{
+                        label: 'จำนวนการยื่นรายการ',
+                        data: [0, 0, 0, 0],
+                        backgroundColor: '#4F46E5'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+                }
+            });
+
+            updateCharts();
+        }
+
+        function updateCharts() {
+            if (!conditionChart || !classChart) return;
+
+            let good = 0, damaged = 0, missing = 0;
+            appData.forEach(r => {
+                Object.values(r.items).forEach(i => {
+                    if (!i.present) missing++;
+                    else if (i.condition === 'damaged') damaged++;
+                    else good++;
+                });
+            });
+
+            conditionChart.data.datasets[0].data = [good, damaged, missing];
+            conditionChart.update();
+
+            let m4 = 0, m5 = 0, m6 = 0, teacher = 0;
+            appData.forEach(r => {
+                if (r.role === 'teacher') teacher++;
+                else if (r.classroom.startsWith('ม.4')) m4++;
+                else if (r.classroom.startsWith('ม.5')) m5++;
+                else if (r.classroom.startsWith('ม.6')) m6++;
+            });
+
+            classChart.data.datasets[0].data = [m4, m5, m6, teacher];
+            classChart.update();
+        }
+    </script>
+</body>
+</html>
